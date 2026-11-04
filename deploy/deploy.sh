@@ -5,7 +5,7 @@ set -euo pipefail
 
 BRANCH="${1:-main}"
 APP_DIR="${ARGUS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-HEALTH_URL="${ARGUS_HEALTH_URL:-http://127.0.0.1:8083/api/health}"
+HEALTH_URL="${ARGUS_HEALTH_URL:-http://127.0.0.1:8848/api/health}"
 COMPOSE="docker compose"
 
 cd "$APP_DIR"

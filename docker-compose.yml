@@ -4,12 +4,12 @@ services:
     image: argus:latest
     container_name: argus
     restart: unless-stopped
-    ports:
-      # 只绑回环，外部流量由宿主机 nginx 反代进来（8083 已确认空闲）
-      - "127.0.0.1:8083:8848"
+    # 用宿主机网络：容器内 127.0.0.1 就是宿主机回环，才能探测那些只绑回环的上游服务
+    # （blog 8081 / ssq 8082 / meting 3000 / nest 8000），换 bridge 会全部 ECONNREFUSED
+    network_mode: host
     environment:
       PORT: 8848
-      HOST: 0.0.0.0
+      HOST: 127.0.0.1
       AUTH_USER: ${AUTH_USER:-}
       AUTH_PASS: ${AUTH_PASS:-}
       DOCKER_SOCKET: /var/run/docker.sock

@@ -43,7 +43,7 @@ git clone https://github.com/chenjieya/ARGUS.git /project/docker/argus
 cd /project/docker/argus
 cp .env.example .env
 docker compose up -d --build
-curl http://127.0.0.1:8083/api/health
+curl http://127.0.0.1:8848/api/health
 ```
 
 `.env` 默认值已经对准当前服务器（原生 nginx + `/etc/nginx/conf.d`），通常不用改：
@@ -54,7 +54,7 @@ NGINX_CONF_HOST=/etc/nginx/conf.d
 NGINX_LOG_HOST=/var/log/nginx
 ```
 
-端口只绑了 `127.0.0.1:8083`，外部访问走宿主机 nginx 反代。
+容器用 `network_mode: host`，直接监听 `127.0.0.1:8848`，外部访问走宿主机 nginx 反代。
 
 ### 接入宿主机 nginx
 
@@ -109,7 +109,7 @@ cd /project/docker/argus && bash deploy/deploy.sh main
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `PORT` | `8848` | 容器内监听端口（compose 映射到宿主机 `127.0.0.1:8083`） |
+| `PORT` | `8848` | 容器内监听端口（compose 映射到宿主机 `127.0.0.1:8848`） |
 | `AUTH_USER` / `AUTH_PASS` | 空 | 同时填了才启用 Basic 认证；`/api/health` 永远放行 |
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | 也可填 `tcp://ip:2375` 之外的自定义路径 |
 | `HOST_PROC` | `/host/proc` | 宿主机 proc 挂载点 |

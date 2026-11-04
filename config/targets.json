@@ -1,5 +1,5 @@
 {
-  "$comment": "手动补充的探测目标。nginx 配置里能解析出来的子域站点会自动并入，这里是额外项（内部端口、外部 API、别人维护的站点等）。",
+  "$comment": "手动补充的探测目标。nginx 配置里能解析出来的子域站点会自动并入，这里是额外项。注意：容器内 127.0.0.1 是容器自身，宿主机回环端口（8081/8082 等）不可达，别往里写。",
   "targets": [
     {
       "id": "argus-self",
@@ -9,16 +9,9 @@
       "expect": 200
     },
     {
-      "id": "blog-upstream",
-      "name": "blog 容器",
-      "url": "http://127.0.0.1:8081/",
-      "group": "内部",
-      "expect": 200
-    },
-    {
-      "id": "ssq-upstream",
-      "name": "ssq-assistant 容器",
-      "url": "http://127.0.0.1:8082/api/health",
+      "id": "docker-gateway",
+      "name": "容器网关",
+      "url": "http://172.17.0.1:8080/",
       "group": "内部",
       "expect": 200
     }
