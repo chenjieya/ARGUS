@@ -18,7 +18,14 @@ docker compose version >/dev/null 2>&1 || COMPOSE="docker-compose"
 
 if [ -d .git ]; then
   log "拉取 origin/$BRANCH"
-  git fetch --all --prune
+  # 这台服务器到 GitHub 会间歇性 TLS 断开，重试几次再放弃
+  ok=0
+  for i in 1 2 3 4 5; do
+    if git fetch --all --prune; then ok=1; break; fi
+    log "拉取失败，${i}/5，5 秒后重试"
+    sleep 5
+  done
+  [ "$ok" = "1" ] || die "拉取 origin/$BRANCH 失败"
   git checkout "$BRANCH"
   git reset --hard "origin/$BRANCH"
 fi
