@@ -9,3 +9,6 @@ Thumbs.db
 .vscode/
 coverage/
 dist/
+
+# 本地运维脚本，绝不入库
+.tools/
