@@ -1,5 +1,5 @@
 {
-  "$comment": "手动补充的探测目标。nginx 配置里能解析出来的子域站点会自动并入，这里是额外项（外部 API、数据库端口、别人的站点等）。",
+  "$comment": "手动补充的探测目标。nginx 配置里能解析出来的子域站点会自动并入，这里是额外项（内部端口、外部 API、别人维护的站点等）。",
   "targets": [
     {
       "id": "argus-self",
@@ -9,10 +9,17 @@
       "expect": 200
     },
     {
-      "id": "blog",
-      "name": "博客主站",
-      "url": "https://alvis.org.cn/",
-      "group": "站点",
+      "id": "blog-upstream",
+      "name": "blog 容器",
+      "url": "http://127.0.0.1:8081/",
+      "group": "内部",
+      "expect": 200
+    },
+    {
+      "id": "ssq-upstream",
+      "name": "ssq-assistant 容器",
+      "url": "http://127.0.0.1:8082/api/health",
+      "group": "内部",
       "expect": 200
     }
   ]

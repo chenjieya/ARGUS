@@ -5,6 +5,7 @@ set -euo pipefail
 
 BRANCH="${1:-main}"
 APP_DIR="${ARGUS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+HEALTH_URL="${ARGUS_HEALTH_URL:-http://127.0.0.1:8083/api/health}"
 COMPOSE="docker compose"
 
 cd "$APP_DIR"
@@ -35,7 +36,7 @@ $COMPOSE up -d --remove-orphans argus
 
 log "等待健康检查"
 for i in $(seq 1 30); do
-  if curl -fsS "http://127.0.0.1:8848/api/health" >/dev/null 2>&1; then
+  if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
     log "健康检查通过（${i}s）"
     break
   fi
@@ -49,5 +50,5 @@ done
 log "清理旧镜像"
 docker image prune -f --filter "label!=keep" >/dev/null 2>&1 || true
 
-log "完成 · http://127.0.0.1:8848"
+log "完成 · $HEALTH_URL"
 $COMPOSE ps argus

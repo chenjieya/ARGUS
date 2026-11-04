@@ -5,8 +5,8 @@ services:
     container_name: argus
     restart: unless-stopped
     ports:
-      # 只绑回环，外部流量由宿主机 nginx 反代进来
-      - "127.0.0.1:8848:8848"
+      # 只绑回环，外部流量由宿主机 nginx 反代进来（8083 已确认空闲）
+      - "127.0.0.1:8083:8848"
     environment:
       PORT: 8848
       HOST: 0.0.0.0
@@ -25,8 +25,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc:/host/proc:ro
       - /:/host:ro
-      # 宿主机 nginx 配置目录（按你的实际路径改 .env 里的 NGINX_CONF_HOST）
-      - ${NGINX_CONF_HOST:-/project/docker/blog/conf}:/etc/nginx-src:ro
+      # 宿主机 nginx 配置目录（原生安装，非容器；只读）
+      - ${NGINX_CONF_HOST:-/etc/nginx/conf.d}:/etc/nginx-src:ro
       - ${NGINX_LOG_HOST:-/var/log/nginx}:/var/log/nginx-src:ro
       - ./config:/app/config:ro
     healthcheck:

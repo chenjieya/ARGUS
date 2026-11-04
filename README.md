@@ -39,66 +39,57 @@ npm start
 ### 服务器上跑（Docker Compose）
 
 ```bash
-git clone <你的仓库地址> /project/docker/argus
+git clone https://github.com/chenjieya/ARGUS.git /project/docker/argus
 cd /project/docker/argus
 cp .env.example .env
-vim .env          # 至少改 NGINX_CONF_HOST
 docker compose up -d --build
-curl http://127.0.0.1:8848/api/health
+curl http://127.0.0.1:8083/api/health
 ```
 
-`.env` 里必改的一项：
+`.env` 默认值已经对准当前服务器（原生 nginx + `/etc/nginx/conf.d`），通常不用改：
 
 ```ini
-# 宿主机上 nginx 配置目录的真实路径。你的 blog 容器挂在 /project/docker/blog/conf
-NGINX_CONF_HOST=/project/docker/blog/conf
+# 宿主机上 nginx 配置目录的真实路径（原生安装，不是容器）
+NGINX_CONF_HOST=/etc/nginx/conf.d
 NGINX_LOG_HOST=/var/log/nginx
 ```
 
-端口只绑了 `127.0.0.1:8848`，外部访问走宿主机 nginx 反代。
+端口只绑了 `127.0.0.1:8083`，外部访问走宿主机 nginx 反代。
 
 ### 接入宿主机 nginx
 
-把 `deploy/nginx-argus.conf` 拷到 nginx 的 conf 目录，改掉 `server_name` 和证书路径，重载：
+把 `deploy/nginx-argus.conf` 放到 `/etc/nginx/conf.d/status.alvis.conf`，然后：
 
 ```bash
-# 如果 nginx 跑在容器里
-docker exec -it blog nginx -t && docker exec -it blog nginx -s reload
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-关键点是 WebSocket 要透传升级头，片段里已经写好了：
-
-```nginx
-proxy_http_version 1.1;
-proxy_set_header Upgrade    $http_upgrade;
-proxy_set_header Connection "upgrade";
-proxy_read_timeout 3600s;
-```
+证书复用 `/etc/nginx/ssl/alvis.org.cn/` 下的 `*.alvis.org.cn` 通配符证书，`status.alvis.org.cn` 已被 SAN 覆盖，不需要单独签发。WebSocket 升级头只在 `location /ws` 里透传，不依赖主配置里的 `map $http_upgrade $connection_upgrade`。
 
 ## 自动部署
 
-仓库里有 `.github/workflows/deploy.yml`，push 到 `main` 就自动部署。
+仓库已推到 `https://github.com/chenjieya/ARGUS.git`，`main` 分支的 push 会触发 `.github/workflows/deploy.yml`。
 
-**建仓库之后要做的三件事**（等你仓库建好告诉我，我来补）：
-
-1. 本地接上远端并推首次：
-
-```bash
-git remote add origin git@github.com:<你>/argus.git
-git branch -M main
-git push -u origin main
-```
-
-2. 在 GitHub 仓库 → Settings → Secrets and variables → Actions 里加四个 secret：
+**还差最后一步：在 GitHub 仓库 → Settings → Secrets and variables → Actions 里加四个 secret**
 
 | Secret | 值 |
 | --- | --- |
-| `DEPLOY_HOST` | 服务器 IP |
-| `DEPLOY_USER` | 登录用户 |
-| `DEPLOY_SSH_KEY` | 私钥全文（对应公钥已在服务器 `~/.ssh/authorized_keys`） |
-| `DEPLOY_PATH` | 服务器上项目路径，如 `/project/docker/argus` |
+| `DEPLOY_HOST` | `152.136.107.93` |
+| `DEPLOY_USER` | `alvis` |
+| `DEPLOY_SSH_KEY` | 私钥全文（需先把对应公钥加到服务器 `~/.ssh/authorized_keys`） |
+| `DEPLOY_PATH` | `/project/docker/argus` |
 
-3. 服务器上先手动跑一次确认链路：
+服务器当前是**密码登录**，Actions 用密钥更稳妥。生成一对专用密钥：
+
+```bash
+ssh-keygen -t ed25519 -C "argus-deploy" -f ~/.ssh/argus_deploy -N ""
+# 公钥追加到服务器
+ssh-copy-id -i ~/.ssh/argus_deploy.pub alvis@152.136.107.93
+# 私钥内容（整段含 BEGIN/END）填进 DEPLOY_SSH_KEY
+cat ~/.ssh/argus_deploy
+```
+
+服务器上先手动跑一次确认链路：
 
 ```bash
 cd /project/docker/argus && bash deploy/deploy.sh main
@@ -118,7 +109,7 @@ cd /project/docker/argus && bash deploy/deploy.sh main
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `PORT` | `8848` | 监听端口 |
+| `PORT` | `8848` | 容器内监听端口（compose 映射到宿主机 `127.0.0.1:8083`） |
 | `AUTH_USER` / `AUTH_PASS` | 空 | 同时填了才启用 Basic 认证；`/api/health` 永远放行 |
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | 也可填 `tcp://ip:2375` 之外的自定义路径 |
 | `HOST_PROC` | `/host/proc` | 宿主机 proc 挂载点 |
