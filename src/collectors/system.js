@@ -95,8 +95,22 @@ function loadAvg() {
 
 let lastNet = null;
 
+// /proc/net/dev 是网络命名空间隔离的，容器里读到的只是自己的网卡。
+// 宿主机网络命名空间在 /proc/1/net/dev（PID 1 属于宿主 PID 空间），优先读它。
+function readNetDev() {
+  const candidates = [path.join(HOST_PROC, '1', 'net', 'dev'), path.join(HOST_PROC, 'net', 'dev'), '/proc/net/dev'];
+  for (const p of candidates) {
+    try {
+      return fs.readFileSync(p, 'utf8');
+    } catch {
+      /* 下一个 */
+    }
+  }
+  return null;
+}
+
 function netInfo() {
-  const text = readProc('net/dev');
+  const text = readNetDev();
   if (!text) return { rxRate: 0, txRate: 0, rxTotal: 0, txTotal: 0 };
   let rx = 0;
   let tx = 0;
@@ -153,6 +167,23 @@ function diskInfo() {
   });
 }
 
+// hostname 受 UTS 命名空间隔离，容器内 os.hostname() 拿到的是容器 ID。
+// 宿主机的真实 hostname 挂在 kernel.hostname 下，/proc/1 也可作退路。
+function hostHostname() {
+  for (const p of [
+    path.join(HOST_PROC, 'sys/kernel/hostname'),
+    path.join(HOST_PROC, '1/hostname'),
+  ]) {
+    try {
+      const name = fs.readFileSync(p, 'utf8').trim();
+      if (name) return name;
+    } catch {
+      /* 下一个 */
+    }
+  }
+  return os.hostname();
+}
+
 function hostInfo() {
   const uptimeSec = (() => {
     const t = readProc('uptime');
@@ -174,7 +205,7 @@ function hostInfo() {
   const cores = (cpuText.match(/^processor\s*:/gm) || []).length || os.cpus().length;
 
   return {
-    hostname: os.hostname(),
+    hostname: hostHostname(),
     os: osName,
     kernel: os.release(),
     arch: os.arch(),
