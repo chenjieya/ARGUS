@@ -2,7 +2,7 @@ import http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { config } from './config.js';
 import { store } from './store.js';
-import { createApp } from './api.js';
+import { createApp, checkBasicAuth } from './api.js';
 import { collectSystem } from './collectors/system.js';
 import { collectDocker } from './collectors/docker.js';
 import { collectNginx } from './collectors/nginx.js';
@@ -11,7 +11,29 @@ import { alert } from './alerts.js';
 
 const app = createApp();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ noServer: true });
+
+// express 的中间件管不到 WebSocket 升级请求，鉴权必须在这里单独做，
+// 否则未认证的人也能连上 /ws 拿到全量快照（容器列表、镜像、nginx 配置）
+server.on('upgrade', (req, socket, head) => {
+  let url;
+  try {
+    url = new URL(req.url, 'http://localhost');
+  } catch {
+    socket.destroy();
+    return;
+  }
+  if (url.pathname !== '/ws') {
+    socket.destroy();
+    return;
+  }
+  if (!checkBasicAuth(req.headers.authorization)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="ARGUS"\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+});
 
 function broadcast(type, data) {
   const msg = JSON.stringify({ type, data });
