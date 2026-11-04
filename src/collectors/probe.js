@@ -4,7 +4,7 @@ import tls from 'node:tls';
 import { URL } from 'node:url';
 import { config } from '../config.js';
 
-function requestOnce(url, method, timeout) {
+function requestOnce(url, method, timeout, authHeader) {
   return new Promise((resolve) => {
     let u;
     try {
@@ -15,6 +15,12 @@ function requestOnce(url, method, timeout) {
     }
     const lib = u.protocol === 'https:' ? https : http;
     const started = Date.now();
+    const headers = {
+      'User-Agent': 'ARGUS-Monitor/1.0',
+      Accept: '*/*',
+      'Accept-Encoding': 'identity',
+    };
+    if (authHeader) headers.Authorization = authHeader;
     const req = lib.request(
       {
         protocol: u.protocol,
@@ -24,11 +30,7 @@ function requestOnce(url, method, timeout) {
         method,
         timeout,
         rejectUnauthorized: false,
-        headers: {
-          'User-Agent': 'ARGUS-Monitor/1.0',
-          Accept: '*/*',
-          'Accept-Encoding': 'identity',
-        },
+        headers,
       },
       (res) => {
         res.resume();
@@ -44,6 +46,25 @@ function requestOnce(url, method, timeout) {
     req.on('error', (e) => resolve({ ok: false, error: e.code || e.message, ms: Date.now() - started, status: 0 }));
     req.end();
   });
+}
+
+// ARGUS 自己的站点也受 Basic 认证保护，探针不带凭据会被自己拦在门外，
+// 表现为「站点宕机 · 401」。这里在首次收到 401 时带凭据重试一次。
+function basicAuthHeader() {
+  if (!config.authUser || !config.authPass) return null;
+  return `Basic ${Buffer.from(`${config.authUser}:${config.authPass}`).toString('base64')}`;
+}
+
+async function probeRequest(url, timeout) {
+  const first = await requestOnce(url, 'GET', timeout);
+  if (first.ok && first.status === 401) {
+    const hdr = basicAuthHeader();
+    if (hdr) {
+      const retry = await requestOnce(url, 'GET', timeout, hdr);
+      if (retry.ok) return retry;
+    }
+  }
+  return first;
 }
 
 // 证书到期：单独开 TLS 连接读 peer certificate
@@ -131,7 +152,7 @@ const state = new Map(); // id -> { fails, lastOk, latencyHistory }
 export async function probeAll(targets) {
   const results = await Promise.all(
     targets.map(async (t) => {
-      const r = await requestOnce(t.url, 'GET', config.probeTimeout);
+      const r = await probeRequest(t.url, config.probeTimeout);
       const st = state.get(t.id) || { fails: 0, lastOk: null, latency: [], uptimeSince: null, everUp: false };
 
       let ok;
@@ -180,4 +201,4 @@ export async function probeAll(targets) {
   return results;
 }
 
-export { requestOnce, certInfo };
+export { requestOnce, certInfo, probeRequest };
