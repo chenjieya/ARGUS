@@ -1,0 +1,68 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: argus-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 语法检查与构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 安装依赖
+        run: npm install --omit=dev
+
+      - name: 语法检查
+        run: |
+          node --check src/server.js
+          node --check src/api.js
+          node --check src/collectors/system.js
+          node --check src/collectors/docker.js
+          node --check src/collectors/nginx.js
+          node --check src/collectors/probe.js
+
+      - name: 启动冒烟测试
+        run: |
+          mkdir -p /tmp/argus-probe
+          PORT=8848 NGINX_CONF_DIR=/tmp/argus-probe node src/server.js &
+          SERVER_PID=$!
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8848/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8848/api/health | tee /dev/stderr | grep -q '"ok":true'
+          curl -fsS http://127.0.0.1:8848/api/snapshot | head -c 200
+          kill $SERVER_PID
+
+      - name: 构建镜像
+        run: docker build -t argus:ci .
+
+  deploy:
+    name: 部署到服务器
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: SSH 部署
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            bash deploy/deploy.sh main

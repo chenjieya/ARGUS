@@ -1,0 +1,42 @@
+services:
+  argus:
+    build: .
+    image: argus:latest
+    container_name: argus
+    restart: unless-stopped
+    ports:
+      # 只绑回环，外部流量由宿主机 nginx 反代进来
+      - "127.0.0.1:8848:8848"
+    environment:
+      PORT: 8848
+      HOST: 0.0.0.0
+      AUTH_USER: ${AUTH_USER:-}
+      AUTH_PASS: ${AUTH_PASS:-}
+      DOCKER_SOCKET: /var/run/docker.sock
+      HOST_PROC: /host/proc
+      NGINX_CONF_DIR: /etc/nginx-src
+      NGINX_LOG_DIR: /var/log/nginx-src
+      DISK_PATHS: /host
+      ALERT_WEBHOOK: ${ALERT_WEBHOOK:-}
+      TLS_WARN_DAYS: ${TLS_WARN_DAYS:-14}
+      APP_VERSION: ${APP_VERSION:-dev}
+    volumes:
+      # 只读挂载：容器只做观测，绝不给写权限
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+      - /:/host:ro
+      # 宿主机 nginx 配置目录（按你的实际路径改 .env 里的 NGINX_CONF_HOST）
+      - ${NGINX_CONF_HOST:-/project/docker/blog/conf}:/etc/nginx-src:ro
+      - ${NGINX_LOG_HOST:-/var/log/nginx}:/var/log/nginx-src:ro
+      - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8848/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

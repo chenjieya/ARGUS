@@ -1,0 +1,20 @@
+{
+  "name": "argus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ARGUS // 全视守望 — 宿主机 / Docker / nginx 子域站点一体化监测台",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ARGUS // 全视守望</title>
+<meta name="description" content="宿主机 / Docker / nginx 子域站点一体化监测台" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%2300e5ff' opacity='.15'/><circle cx='50' cy='50' r='18' fill='%2300e5ff'/><circle cx='50' cy='50' r='7' fill='%23061018'/></svg>" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#05080d" />
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 40 40" width="30" height="30" aria-hidden="true">
+        <circle cx="20" cy="20" r="18" fill="none" stroke="url(#g1)" stroke-width="1.6"/>
+        <circle cx="20" cy="20" r="11" fill="none" stroke="url(#g1)" stroke-width="1.2" opacity=".6"/>
+        <circle cx="20" cy="20" r="4.6" fill="#00e5ff"/>
+        <circle cx="20" cy="20" r="1.8" fill="#04121b"/>
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#00e5ff"/>
+            <stop offset="100%" stop-color="#a855f7"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <h1>ARGUS<span class="slash">//</span>全视守望</h1>
+      <p id="hostline" class="muted">正在连接…</p>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <div id="healthPill" class="pill pill-unknown">
+      <span class="dot"></span><span id="healthText">同步中</span>
+    </div>
+    <div class="clock">
+      <span id="clock">--:--:--</span>
+      <small id="dateline"></small>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- 概览卡片 -->
+  <section class="cards" id="cards">
+    <article class="card card-hero">
+      <div class="card-label">CPU 负载</div>
+      <div class="gauge" data-kind="cpu">
+        <svg viewBox="0 0 120 120"><circle class="gauge-track" cx="60" cy="60" r="52"/><circle class="gauge-bar" cx="60" cy="60" r="52"/></svg>
+        <div class="gauge-num"><b id="cpuVal">--</b><i>%</i></div>
+      </div>
+      <div class="card-sub" id="cpuSub">0 核 · 负载 --</div>
+    </article>
+
+    <article class="card card-hero">
+      <div class="card-label">内存占用</div>
+      <div class="gauge" data-kind="mem">
+        <svg viewBox="0 0 120 120"><circle class="gauge-track" cx="60" cy="60" r="52"/><circle class="gauge-bar" cx="60" cy="60" r="52"/></svg>
+        <div class="gauge-num"><b id="memVal">--</b><i>%</i></div>
+      </div>
+      <div class="card-sub" id="memSub">-- / --</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">运行容器</div>
+      <div class="big-num"><b id="ctrRunning">--</b><span id="ctrTotal" class="muted">/--</span></div>
+      <div class="spark-row">
+        <span class="tag tag-cyan" id="ctrCpu">CPU 0%</span>
+        <span class="tag tag-purple" id="ctrMem">MEM 0</span>
+      </div>
+      <div class="card-sub" id="ctrUnhealthy"></div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">站点在线</div>
+      <div class="big-num"><b id="siteUp">--</b><span id="siteTotal" class="muted">/--</span></div>
+      <div class="bars" id="siteBars"></div>
+      <div class="card-sub" id="siteSub">探测中…</div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">网络吞吐</div>
+      <div class="net-row"><span class="arrow down">↓</span><b id="netIn">--</b></div>
+      <div class="net-row"><span class="arrow up">↑</span><b id="netTx">--</b></div>
+      <div class="card-sub" id="netSub"></div>
+    </article>
+
+    <article class="card">
+      <div class="card-label">系统运行</div>
+      <div class="big-num"><b id="uptimeVal">--</b></div>
+      <div class="card-sub" id="kernelLine"></div>
+      <div class="card-sub" id="bootLine"></div>
+    </article>
+  </section>
+
+  <!-- 图表区 -->
+  <section class="panel-row">
+    <article class="panel">
+      <header class="panel-head">
+        <h2>资源曲线</h2>
+        <div class="legend">
+          <span><i style="background:#00e5ff"></i>CPU</span>
+          <span><i style="background:#a855f7"></i>内存</span>
+          <span><i style="background:#f59e0b"></i>负载</span>
+        </div>
+      </header>
+      <canvas id="chartRes"></canvas>
+    </article>
+    <article class="panel">
+      <header class="panel-head">
+        <h2>网络流量</h2>
+        <div class="legend">
+          <span><i style="background:#22d3ee"></i>下行</span>
+          <span><i style="background:#f472b6"></i>上行</span>
+        </div>
+      </header>
+      <canvas id="chartNet"></canvas>
+    </article>
+  </section>
+
+  <!-- 站点 -->
+  <section class="panel" id="sitesPanel">
+    <header class="panel-head">
+      <h2>子域站点<span class="count" id="siteCount"></span></h2>
+      <div class="filters">
+        <button class="chip active" data-filter="all">全部</button>
+        <button class="chip" data-filter="up">在线</button>
+        <button class="chip" data-filter="down">异常</button>
+      </div>
+    </header>
+    <div class="site-grid" id="siteGrid"></div>
+  </section>
+
+  <!-- Docker -->
+  <section class="panel" id="dockerPanel">
+    <header class="panel-head">
+      <h2>容器矩阵<span class="count" id="ctrCount"></span></h2>
+      <div class="filters">
+        <button class="chip active" data-dfilter="all">全部</button>
+        <button class="chip" data-dfilter="running">运行中</button>
+        <button class="chip" data-dfilter="stopped">已停止</button>
+        <button class="chip" data-dfilter="project">按项目</button>
+      </div>
+    </header>
+    <div id="dockerBody" class="docker-body"></div>
+  </section>
+
+  <!-- 底部三栏 -->
+  <section class="panel-row three">
+    <article class="panel">
+      <header class="panel-head"><h2>磁盘</h2></header>
+      <div id="diskList" class="disk-list"></div>
+    </article>
+    <article class="panel">
+      <header class="panel-head"><h2>nginx 路由</h2></header>
+      <div id="nginxList" class="nginx-list"></div>
+    </article>
+    <article class="panel">
+      <header class="panel-head"><h2>事件流</h2></header>
+      <div id="eventList" class="event-list"></div>
+    </article>
+  </section>
+
+  <footer class="foot">
+    <span>ARGUS · 全视守望</span>
+    <span class="muted">v<span id="ver">dev</span></span>
+    <span class="muted" id="wsState">socket: connecting</span>
+  </footer>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

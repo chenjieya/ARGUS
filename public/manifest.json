@@ -1,0 +1,10 @@
+{
+  "name": "ARGUS 全视守望",
+  "short_name": "ARGUS",
+  "description": "宿主机 / Docker / nginx 子域站点监测台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05080d",
+  "theme_color": "#05080d",
+  "icons": []
+}
