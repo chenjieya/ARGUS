@@ -168,12 +168,14 @@ function diskInfo() {
 }
 
 // hostname 受 UTS 命名空间隔离，容器内 os.hostname() 拿到的是容器 ID。
-// 宿主机的真实 hostname 挂在 kernel.hostname 下，/proc/1 也可作退路。
+// 宿主机的真实值在 /host/etc/hostname；/proc/sys/kernel/hostname 在容器里指向自己，不可用。
 function hostHostname() {
-  for (const p of [
-    path.join(HOST_PROC, 'sys/kernel/hostname'),
-    path.join(HOST_PROC, '1/hostname'),
-  ]) {
+  const candidates = [
+    // HOST_PROC 形如 /host/proc，上一级就是宿主机根
+    path.resolve(HOST_PROC, '..', 'etc', 'hostname'),
+    '/etc/hostname',
+  ];
+  for (const p of candidates) {
     try {
       const name = fs.readFileSync(p, 'utf8').trim();
       if (name) return name;
