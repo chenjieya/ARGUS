@@ -136,10 +136,32 @@ sudo /usr/sbin/ufw --force enable
 | `nginx -t` | successful |
 | 运行中容器 | 14 个全部 Up，argus `Up (healthy)` |
 | `https://status.alvis.org.cn/api/health` | 200 |
+| 面板未认证访问 `/`、`/api/*` | 401 |
+| 面板 WebSocket 未认证升级 | 401 |
 
 `5173`、`9527`、`8080` 仍对外开放，为三个前端演示站，保持原状。
 
-## 四、遗留事项
+## 四、面板访问控制（ARGUS）
+
+ARGUS 面板会把整台服务器的容器清单、镜像名、端口发布、nginx 站点与上游、CPU/内存/磁盘全部暴露出来，因此**不能匿名访问**。认证在应用层做，不依赖网络位置。
+
+配置位置：服务器 `/project/docker/argus/.env`
+
+```bash
+AUTH_USER=admin
+AUTH_PASS=<强口令，不入库>
+```
+
+`AUTH_USER` 与 `AUTH_PASS` **同时非空**才启用；任一为空则认证整体关闭，面板重新对公网裸奔。改完 `.env` 需 `docker compose up -d argus` 重建容器才生效（环境变量在启动时读入）。
+
+实现要点：
+
+1. 除 `/api/health` 外，所有 `/api/*` 与静态页面都要求 Basic 认证。`/api/health` 必须免认证，否则容器自身的 healthcheck 会永远失败、容器起不来。
+2. 口令比较走 `sha256` 摘要后 `crypto.timingSafeEqual`，避免按字符逐位比较泄露时序；长度差异也一并抹平。
+3. **WebSocket 必须单独鉴权**。`/ws` 走的是 HTTP Upgrade，不经过 express 中间件，只在 `app.use` 里加认证是拦不住的，未认证的人照样能连上 `wss://status.alvis.org.cn/ws` 拿到全量快照。`src/server.js` 在 `server.on('upgrade')` 里校验同一份 Basic 凭据，失败直接回 `401` 并断开。
+4. 探针探测自己（`status.alvis.org.cn`）时也会被这道认证拦住，表现为恒为 `401`、页面误报「部分异常」。`src/collectors/probe.js` 的 `probeRequest()` 在首次收到 `401` 时带配置凭据重试一次，仅对需要认证的目标生效。
+
+## 五、遗留事项
 
 1. **`14777` 的 `alfred_vaults` 是凭据管理服务**，端口现已封堵，但若它此前被外部访问过，其中的密钥应视为可能泄露，建议轮换。
 2. **`mysql-dev` 的 `xiaozhai` 账号密码等于用户名**，虽然端口已封，仍建议改为强密码；root 的环境变量 `765321` 与实际密码不一致，建议清理该环境变量避免误导。
